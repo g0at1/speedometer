@@ -172,11 +172,16 @@ class SystemMonitor: ObservableObject {
 
     private func getGPUUsage() -> Double {
         let task = Process()
-        task.launchPath = "/usr/sbin/ioreg"
+        task.executableURL = URL(fileURLWithPath: "/usr/sbin/ioreg")
         task.arguments = ["-l", "-w0", "-c", "IOAccelerator"]
         let pipe = Pipe()
         task.standardOutput = pipe
-        task.launch()
+        do {
+            try task.run()
+        } catch {
+            print("Failed to run process: \(error)")
+            return 0
+        }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         task.waitUntilExit()
         guard let output = String(data: data, encoding: .utf8) else { return 0 }
