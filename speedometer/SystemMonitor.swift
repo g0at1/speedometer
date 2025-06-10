@@ -181,13 +181,11 @@ class SystemMonitor: ObservableObject {
         task.waitUntilExit()
         guard let output = String(data: data, encoding: .utf8) else { return 0 }
 
-        if let line = output
-            .split(separator: "\n")
-            .first(where: { $0.contains("PercentBusy") }),
-           let number = line
-            .split(whereSeparator: { !$0.isNumber })
-            .compactMap({ Double($0) })
-            .first {
+        let regexPattern = #"PercentBusy\s*=\s*(\d+)"#
+        if let regex = try? NSRegularExpression(pattern: regexPattern),
+           let match = regex.firstMatch(in: output, range: NSRange(output.startIndex..., in: output)),
+           let range = Range(match.range(at: 1), in: output),
+           let number = Double(output[range]) {
             return number
         }
         return 0
