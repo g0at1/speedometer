@@ -3,18 +3,17 @@ import Combine
 import Darwin
 
 class SystemMonitor: ObservableObject {
-    // istniejące metryki
     @Published var cpuUsage: Double = 0
     @Published var memoryUsage: Double = 0
     
-    // sieć (KB/s)
     @Published var netInKBps: Double = 0
     @Published var netOutKBps: Double = 0
     
-    // dysk
     @Published var diskUsage: Double = 0         // %
     @Published var diskFreeGB: Double = 0        // GB
     @Published var diskTotalGB: Double = 0       // GB
+    @Published var gpuUsage: Double = 0
+    @Published var uptime: TimeInterval = 0
 
     private var timer: Timer?
     private var lastNetStats: (timestamp: TimeInterval, bytesIn: UInt64, bytesOut: UInt64)?
@@ -26,18 +25,17 @@ class SystemMonitor: ObservableObject {
     }
 
     func startMonitoring() {
-        // 1) create a bare Timer (don’t use scheduledTimer)
         timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
 
-            // gather metrics off the main thread
             DispatchQueue.global(qos: .utility).async {
                 let cpu    = self.getCPUUsage()
                 let ram    = self.getMemoryUsage()
                 let (inB, outB) = self.getNetworkUsage()
                 let (free, total) = self.getDiskSpace()
+                let gpu = self.getGPUUsage()
+                let up = self.getSystemUptimeSinceBoot()
 
-                // publish back on the main thread
                 DispatchQueue.main.async {
                     self.cpuUsage    = cpu
                     self.memoryUsage = ram
@@ -46,11 +44,12 @@ class SystemMonitor: ObservableObject {
                     self.diskFreeGB  = free
                     self.diskTotalGB = total
                     self.diskUsage   = total > 0 ? ((total - free) / total) * 100.0 : 0
+                    self.gpuUsage = gpu
+                    self.uptime = up
                 }
             }
         }
 
-        // 2) add it to the main run loop in common modes
         if let t = timer {
             t.tolerance = 0.1
             RunLoop.main.add(t, forMode: .common)
@@ -169,5 +168,46 @@ class SystemMonitor: ObservableObject {
         let totalBytes = Double(stat.f_blocks)   * blockSize
         return (freeBytes  / 1_000_000_000,
                 totalBytes / 1_000_000_000)
+    }
+
+    private func getGPUUsage() -> Double {
+        let task = Process()
+        task.launchPath = "/usr/sbin/ioreg"
+        task.arguments = ["-l", "-w0", "-c", "IOAccelerator"]
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.launch()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        task.waitUntilExit()
+        guard let output = String(data: data, encoding: .utf8) else { return 0 }
+
+        if let line = output
+            .split(separator: "\n")
+            .first(where: { $0.contains("PercentBusy") }),
+           let number = line
+            .split(whereSeparator: { !$0.isNumber })
+            .compactMap({ Double($0) })
+            .first {
+            return number
+        }
+        return 0
+    }
+    
+    private func getSystemUptimeSinceBoot() -> TimeInterval {
+        var boottime = timeval()
+        var mib: [Int32] = [CTL_KERN, KERN_BOOTTIME]
+        var size = MemoryLayout<timeval>.stride
+
+        let result = sysctl(&mib, UInt32(mib.count), &boottime, &size, nil, 0)
+        guard result == 0 else {
+            return ProcessInfo.processInfo.systemUptime
+        }
+
+        let bootDate = Date(
+            timeIntervalSince1970: TimeInterval(boottime.tv_sec)
+                + TimeInterval(boottime.tv_usec) / 1_000_000
+        )
+
+        return Date().timeIntervalSince(bootDate)
     }
 }
