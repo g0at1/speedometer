@@ -63,8 +63,14 @@ struct ContentView: View {
 
                 MetricCard(title: "Network") {
                     HStack(spacing: 12) {
-                        Label("\(mon.netInKBps, specifier: "%.0f") KB/s", systemImage: "arrow.down.circle")
-                        Label("\(mon.netOutKBps, specifier: "%.0f") KB/s", systemImage: "arrow.up.circle")
+                        Label(
+                            "\(mon.netInKBps, specifier: "%.0f") KB/s",
+                            systemImage: "arrow.down.circle"
+                        )
+                        Label(
+                            "\(mon.netOutKBps, specifier: "%.0f") KB/s",
+                            systemImage: "arrow.up.circle"
+                        )
                     }
                     .font(.subheadline)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -79,9 +85,40 @@ struct ContentView: View {
                     ProgressView(value: mon.diskUsage, total: 100)
                         .tint(color(for: mon.diskUsage))
                         .frame(height: 6)
-                    Text("\(mon.diskFreeGB, specifier: "%.1f") GB available of \(mon.diskTotalGB, specifier: "%.2f") GB")
-                        .font(.footnote)
+                    Text(
+                        "\(mon.diskFreeGB, specifier: "%.1f") GB available of \(mon.diskTotalGB, specifier: "%.2f") GB"
+                    )
+                    .font(.footnote)
                 }
+
+                MetricCard(title: "Battery") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Image(
+                                systemName: mon.timeToFullCharge > 0
+                                    ? "battery.100.bolt" : "battery.100"
+                            )
+                            Text("\(mon.batteryLevel, specifier: "%.0f")%")
+                                .bold()
+                        }
+                        ProgressView(value: mon.batteryLevel, total: 100)
+                            .tint(batteryColor(for: mon.batteryLevel))
+                            .frame(height: 6)
+                        if mon.timeToFullCharge > 0 {
+                            Text(
+                                "Time to full: \(formatDuration(mon.timeToFullCharge))"
+                            )
+                            .font(.footnote)
+                        }
+                        HStack(spacing: 12) {
+                            Text(
+                                "Health: \(mon.batteryHealth, specifier: "%.0f")%"
+                            )
+                        }
+                        .font(.footnote)
+                    }
+                }
+
                 MetricCard(title: "Uptime") {
                     HStack {
                         Image(systemName: "clock.fill")
@@ -117,14 +154,31 @@ private func color(for percentage: Double) -> Color {
     }
 }
 
+private func batteryColor(for percentage: Double) -> Color {
+    switch percentage {
+    case 0..<20:
+        return .red
+    case 20..<50:
+        return .orange
+    default:
+        return .green
+    }
+}
+
 private func format(uptime: TimeInterval) -> String {
     let totalSeconds = Int(uptime)
-    let days    = totalSeconds / 86_400
-    let hours   = (totalSeconds % 86_400) / 3_600
+    let days = totalSeconds / 86_400
+    let hours = (totalSeconds % 86_400) / 3_600
     let minutes = (totalSeconds % 3_600) / 60
     if days > 0 {
         return "\(days)d \(hours)h \(minutes)m"
     } else {
         return "\(hours)h \(minutes)m"
     }
+}
+
+private func formatDuration(_ seconds: TimeInterval) -> String {
+    let hrs = Int(seconds) / 3600
+    let mins = (Int(seconds) % 3600) / 60
+    return String(format: "%dh %dm", hrs, mins)
 }
