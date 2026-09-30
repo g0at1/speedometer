@@ -11,7 +11,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 struct SystemMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     var body: some Scene {
-        MenuBarExtra("Monitor", image: "monitorIcon") {
+        MenuBarExtra(
+            "Speedometer",
+            systemImage: "gauge.with.dots.needle.67percent"
+        ) {
             ContentView()
         }
         .menuBarExtraStyle(.window)

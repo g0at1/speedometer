@@ -28,9 +28,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		85832E652DF7378700BFD403 /* speedometer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = speedometer.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		85832E732DF7378800BFD403 /* speedometerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = speedometerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		85832E7D2DF7378800BFD403 /* speedometerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = speedometerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		85832E652DF7378700BFD403 /* Speedometer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Speedometer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		85832E732DF7378800BFD403 /* SpeedometerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpeedometerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		85832E7D2DF7378800BFD403 /* SpeedometerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpeedometerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		85832E962DF74BDF00BFD403 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -91,9 +91,9 @@
 		85832E662DF7378700BFD403 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				85832E652DF7378700BFD403 /* speedometer.app */,
-				85832E732DF7378800BFD403 /* speedometerTests.xctest */,
-				85832E7D2DF7378800BFD403 /* speedometerUITests.xctest */,
+				85832E652DF7378700BFD403 /* Speedometer.app */,
+				85832E732DF7378800BFD403 /* SpeedometerTests.xctest */,
+				85832E7D2DF7378800BFD403 /* SpeedometerUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -101,9 +101,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		85832E642DF7378700BFD403 /* speedometer */ = {
+		85832E642DF7378700BFD403 /* Speedometer */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 85832E872DF7378800BFD403 /* Build configuration list for PBXNativeTarget "speedometer" */;
+			buildConfigurationList = 85832E872DF7378800BFD403 /* Build configuration list for PBXNativeTarget "Speedometer" */;
 			buildPhases = (
 				85832E612DF7378700BFD403 /* Sources */,
 				85832E622DF7378700BFD403 /* Frameworks */,
@@ -116,16 +116,16 @@
 			fileSystemSynchronizedGroups = (
 				85832E672DF7378700BFD403 /* speedometer */,
 			);
-			name = speedometer;
+			name = Speedometer;
 			packageProductDependencies = (
 			);
 			productName = speedometer;
-			productReference = 85832E652DF7378700BFD403 /* speedometer.app */;
+			productReference = 85832E652DF7378700BFD403 /* Speedometer.app */;
 			productType = "com.apple.product-type.application";
 		};
-		85832E722DF7378800BFD403 /* speedometerTests */ = {
+		85832E722DF7378800BFD403 /* SpeedometerTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 85832E8A2DF7378800BFD403 /* Build configuration list for PBXNativeTarget "speedometerTests" */;
+			buildConfigurationList = 85832E8A2DF7378800BFD403 /* Build configuration list for PBXNativeTarget "SpeedometerTests" */;
 			buildPhases = (
 				85832E6F2DF7378800BFD403 /* Sources */,
 				85832E702DF7378800BFD403 /* Frameworks */,
@@ -139,16 +139,16 @@
 			fileSystemSynchronizedGroups = (
 				85832E762DF7378800BFD403 /* speedometerTests */,
 			);
-			name = speedometerTests;
+			name = SpeedometerTests;
 			packageProductDependencies = (
 			);
 			productName = speedometerTests;
-			productReference = 85832E732DF7378800BFD403 /* speedometerTests.xctest */;
+			productReference = 85832E732DF7378800BFD403 /* SpeedometerTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		85832E7C2DF7378800BFD403 /* speedometerUITests */ = {
+		85832E7C2DF7378800BFD403 /* SpeedometerUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 85832E8D2DF7378800BFD403 /* Build configuration list for PBXNativeTarget "speedometerUITests" */;
+			buildConfigurationList = 85832E8D2DF7378800BFD403 /* Build configuration list for PBXNativeTarget "SpeedometerUITests" */;
 			buildPhases = (
 				85832E792DF7378800BFD403 /* Sources */,
 				85832E7A2DF7378800BFD403 /* Frameworks */,
@@ -162,11 +162,11 @@
 			fileSystemSynchronizedGroups = (
 				85832E802DF7378800BFD403 /* speedometerUITests */,
 			);
-			name = speedometerUITests;
+			name = SpeedometerUITests;
 			packageProductDependencies = (
 			);
 			productName = speedometerUITests;
-			productReference = 85832E7D2DF7378800BFD403 /* speedometerUITests.xctest */;
+			productReference = 85832E7D2DF7378800BFD403 /* SpeedometerUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -192,7 +192,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 85832E602DF7378700BFD403 /* Build configuration list for PBXProject "speedometer" */;
+			buildConfigurationList = 85832E602DF7378700BFD403 /* Build configuration list for PBXProject "Speedometer" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -206,9 +206,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				85832E642DF7378700BFD403 /* speedometer */,
-				85832E722DF7378800BFD403 /* speedometerTests */,
-				85832E7C2DF7378800BFD403 /* speedometerUITests */,
+				85832E642DF7378700BFD403 /* Speedometer */,
+				85832E722DF7378800BFD403 /* SpeedometerTests */,
+				85832E7C2DF7378800BFD403 /* SpeedometerUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -265,12 +265,12 @@
 /* Begin PBXTargetDependency section */
 		85832E752DF7378800BFD403 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 85832E642DF7378700BFD403 /* speedometer */;
+			target = 85832E642DF7378700BFD403 /* Speedometer */;
 			targetProxy = 85832E742DF7378800BFD403 /* PBXContainerItemProxy */;
 		};
 		85832E7F2DF7378800BFD403 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 85832E642DF7378700BFD403 /* speedometer */;
+			target = 85832E642DF7378700BFD403 /* Speedometer */;
 			targetProxy = 85832E7E2DF7378800BFD403 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -399,12 +399,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = speedometer/speedometer.entitlements;
+				CODE_SIGN_ENTITLEMENTS = speedometer/Speedometer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Speedometer;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -412,7 +414,8 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.michalL.speedometer;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = speedometer;
+				PRODUCT_NAME = Speedometer;
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -424,12 +427,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = speedometer/speedometer.entitlements;
+				CODE_SIGN_ENTITLEMENTS = speedometer/Speedometer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Speedometer;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -437,7 +442,8 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.michalL.speedometer;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = speedometer;
+				PRODUCT_NAME = Speedometer;
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -457,7 +463,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/speedometer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/speedometer";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Speedometer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Speedometer";
 			};
 			name = Debug;
 		};
@@ -474,7 +480,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/speedometer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/speedometer";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Speedometer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Speedometer";
 			};
 			name = Release;
 		};
@@ -489,7 +495,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = speedometer;
+				TEST_TARGET_NAME = Speedometer;
 			};
 			name = Debug;
 		};
@@ -504,14 +510,14 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = speedometer;
+				TEST_TARGET_NAME = Speedometer;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		85832E602DF7378700BFD403 /* Build configuration list for PBXProject "speedometer" */ = {
+		85832E602DF7378700BFD403 /* Build configuration list for PBXProject "Speedometer" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				85832E852DF7378800BFD403 /* Debug */,
@@ -520,7 +526,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		85832E872DF7378800BFD403 /* Build configuration list for PBXNativeTarget "speedometer" */ = {
+		85832E872DF7378800BFD403 /* Build configuration list for PBXNativeTarget "Speedometer" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				85832E882DF7378800BFD403 /* Debug */,
@@ -529,7 +535,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		85832E8A2DF7378800BFD403 /* Build configuration list for PBXNativeTarget "speedometerTests" */ = {
+		85832E8A2DF7378800BFD403 /* Build configuration list for PBXNativeTarget "SpeedometerTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				85832E8B2DF7378800BFD403 /* Debug */,
@@ -538,7 +544,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		85832E8D2DF7378800BFD403 /* Build configuration list for PBXNativeTarget "speedometerUITests" */ = {
+		85832E8D2DF7378800BFD403 /* Build configuration list for PBXNativeTarget "SpeedometerUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				85832E8E2DF7378800BFD403 /* Debug */,

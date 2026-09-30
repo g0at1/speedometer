@@ -1,310 +1,377 @@
 import Combine
 import Darwin
 import Foundation
+import IOKit
 import IOKit.ps
 
-class SystemMonitor: ObservableObject {
-    @Published var cpuUsage: Double = 0
-    @Published var memoryUsage: Double = 0
+struct SystemStats: Equatable {
+    var cpuUsage: Double = 0
+    var memoryUsage: Double = 0
 
-    @Published var netInKBps: Double = 0
-    @Published var netOutKBps: Double = 0
+    var netInKBps: Double = 0
+    var netOutKBps: Double = 0
+    var netInHistory: [Double] = []  // KB/s
+    var netOutHistory: [Double] = []  // KB/s
 
-    @Published var diskUsage: Double = 0  // %
-    @Published var diskFreeGB: Double = 0  // GB
-    @Published var diskTotalGB: Double = 0  // GB
-    @Published var gpuUsage: Double = 0
-    @Published var uptime: TimeInterval = 0
-    @Published var batteryLevel: Double = 0  // 0.0–100.0
-    @Published var timeToFullCharge: TimeInterval = 0
-    @Published var batteryHealth: Double = 100
+    var diskUsage: Double = 0  // %
+    var diskFreeGB: Double = 0  // GB
+    var diskTotalGB: Double = 0  // GB
+    var gpuUsage: Double = 0
+    var uptime: TimeInterval = 0
+    var batteryLevel: Double = 0  // 0.0–100.0
+    var timeToFullCharge: TimeInterval = 0
+    var batteryHealth: Double = 100
+    var hasBattery = false
+    var isCharging = false
+    var isPluggedIn = false
+}
 
-    private var timer: Timer?
-    private var lastNetStats:
-        (timestamp: TimeInterval, bytesIn: UInt64, bytesOut: UInt64)?
+/// Publishes a fresh `SystemStats` once per second while monitoring.
+///
+/// All sampling happens on a private serial queue, so samples never overlap
+/// and the sampler's state needs no locking. The UI gets one update per tick.
+final class SystemMonitor: ObservableObject {
+    static let historyLength = 60
 
-    init() {
-    }
+    @Published private(set) var stats = SystemStats()
+
+    private let queue = DispatchQueue(
+        label: "com.michalL.speedometer.sampler", qos: .utility)
+    private let sampler = Sampler(historyLength: historyLength)
+    private var timer: DispatchSourceTimer?
+
     deinit {
-        stopMonitoring()
+        timer?.cancel()
     }
 
     func startMonitoring() {
-        timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
+        guard timer == nil else { return }
+        let sampler = sampler
+        queue.async { sampler.reset() }
 
-            DispatchQueue.global(qos: .utility).async {
-                let cpu = self.getCPUUsage()
-                let ram = self.getMemoryUsage()
-                let (inB, outB) = self.getNetworkUsage()
-                let (free, total) = self.getDiskSpace()
-                let gpu = self.getGPUUsage()
-                let up = self.getSystemUptimeSinceBoot()
-                let (level, timeToFull, health) = self.getBatteryInfo()
-
-                DispatchQueue.main.async {
-                    self.cpuUsage = cpu
-                    self.memoryUsage = ram
-                    self.netInKBps = Double(inB) / 1024.0
-                    self.netOutKBps = Double(outB) / 1024.0
-                    self.diskFreeGB = free
-                    self.diskTotalGB = total
-                    self.diskUsage =
-                        total > 0 ? ((total - free) / total) * 100.0 : 0
-                    self.gpuUsage = gpu
-                    self.uptime = up
-                    self.batteryLevel = level
-                    self.timeToFullCharge = timeToFull
-                    self.batteryHealth = health
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        // First tick shortly after priming so CPU/network deltas are meaningful.
+        t.schedule(
+            deadline: .now() + .milliseconds(250),
+            repeating: .seconds(1),
+            leeway: .milliseconds(250)
+        )
+        t.setEventHandler { [weak self] in
+            let next = sampler.sample()
+            DispatchQueue.main.async {
+                guard let self, self.timer != nil, self.stats != next else {
+                    return
                 }
+                self.stats = next
             }
         }
-
-        if let t = timer {
-            t.tolerance = 0.1
-            RunLoop.main.add(t, forMode: .common)
-        }
+        timer = t
+        t.resume()
     }
 
     func stopMonitoring() {
-        timer?.invalidate()
+        timer?.cancel()
+        timer = nil
+    }
+}
+
+/// Reads system metrics. Only ever used from `SystemMonitor`'s serial queue.
+final class Sampler {
+    private let historyLength: Int
+    private let hostPort = mach_host_self()
+    private let bootDate = Sampler.readBootDate()
+
+    private var stats = SystemStats()
+    private var tick = 0
+    private var lastCPUTicks: (used: UInt64, total: UInt64)?
+    private var lastNet: (time: UInt64, bytesIn: UInt64, bytesOut: UInt64)?
+    private var gpuServices: [io_service_t] = []
+
+    // Slow-changing values are refreshed less often than every tick.
+    private let diskEvery = 10
+    private let batteryEvery = 5
+    private let batteryHealthEvery = 300
+
+    init(historyLength: Int) {
+        self.historyLength = historyLength
+    }
+
+    deinit {
+        gpuServices.forEach { IOObjectRelease($0) }
+        mach_port_deallocate(mach_task_self_, hostPort)
+    }
+
+    /// Primes the delta-based counters and clears history, so a restart
+    /// after the window was closed doesn't average over the closed period.
+    func reset() {
+        tick = 0
+        stats.netInHistory = []
+        stats.netOutHistory = []
+        lastCPUTicks = nil
+        lastNet = nil
+        _ = readCPUUsage()
+        _ = readNetworkRates()
+    }
+
+    func sample() -> SystemStats {
+        stats.cpuUsage = readCPUUsage() ?? stats.cpuUsage
+        stats.memoryUsage = readMemoryUsage() ?? stats.memoryUsage
+        stats.gpuUsage = readGPUUsage() ?? stats.gpuUsage
+        stats.uptime = Date().timeIntervalSince(bootDate)
+
+        let (inKB, outKB) = readNetworkRates() ?? (0, 0)
+        stats.netInKBps = inKB
+        stats.netOutKBps = outKB
+        stats.netInHistory = appending(inKB, to: stats.netInHistory)
+        stats.netOutHistory = appending(outKB, to: stats.netOutHistory)
+
+        if tick % diskEvery == 0, let (free, total) = readDiskSpace() {
+            stats.diskFreeGB = free
+            stats.diskTotalGB = total
+            stats.diskUsage = total > 0 ? (total - free) / total * 100 : 0
+        }
+        if tick % batteryEvery == 0 {
+            readBattery(includeHealth: tick % batteryHealthEvery == 0)
+        }
+
+        tick += 1
+        return stats
+    }
+
+    private func appending(_ value: Double, to history: [Double]) -> [Double] {
+        var history = history
+        history.append(value)
+        if history.count > historyLength {
+            history.removeFirst(history.count - historyLength)
+        }
+        return history
     }
 
     // MARK: – CPU
 
-    private func getCPUUsage() -> Double {
+    private func readCPUUsage() -> Double? {
+        var info = host_cpu_load_info()
         var count = mach_msg_type_number_t(
             MemoryLayout<host_cpu_load_info_data_t>.size
                 / MemoryLayout<integer_t>.size
         )
-        var cpuInfo = host_cpu_load_info()
-        let hostPort = mach_host_self()
-        let kr = withUnsafeMutablePointer(to: &cpuInfo) {
+        let kr = withUnsafeMutablePointer(to: &info) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics(
-                    hostPort,
-                    HOST_CPU_LOAD_INFO,
-                    $0,
-                    &count
-                )
+                host_statistics(hostPort, HOST_CPU_LOAD_INFO, $0, &count)
             }
         }
-        guard kr == KERN_SUCCESS else { return 0 }
-        let user = Double(cpuInfo.cpu_ticks.0)
-        let sys = Double(cpuInfo.cpu_ticks.1)
-        let idle = Double(cpuInfo.cpu_ticks.2)
-        let nice = Double(cpuInfo.cpu_ticks.3)
-        let total = user + sys + nice + idle
-        let used = total - idle
-        return (used / total) * 100.0
+        guard kr == KERN_SUCCESS else { return nil }
+
+        let user = UInt64(info.cpu_ticks.0)
+        let system = UInt64(info.cpu_ticks.1)
+        let idle = UInt64(info.cpu_ticks.2)
+        let nice = UInt64(info.cpu_ticks.3)
+        let used = user + system + nice
+        let total = used + idle
+        defer { lastCPUTicks = (used, total) }
+
+        // Usage over the last interval, not the average since boot.
+        guard let last = lastCPUTicks, total > last.total, used >= last.used
+        else { return nil }
+        return Double(used - last.used) / Double(total - last.total) * 100
     }
 
-    // MARK: – PAMIĘĆ
+    // MARK: – Memory
 
-    private func getMemoryUsage() -> Double {
+    private func readMemoryUsage() -> Double? {
         var stats = vm_statistics64()
-        var count = UInt32(
+        var count = mach_msg_type_number_t(
             MemoryLayout<vm_statistics64_data_t>.size
                 / MemoryLayout<integer_t>.size
         )
         let kr = withUnsafeMutablePointer(to: &stats) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics64(
-                    mach_host_self(),
-                    HOST_VM_INFO64,
-                    $0,
-                    &count
-                )
+                host_statistics64(hostPort, HOST_VM_INFO64, $0, &count)
             }
         }
-        guard kr == KERN_SUCCESS else { return 0 }
-        let pageSize = Double(vm_kernel_page_size)
+        guard kr == KERN_SUCCESS else { return nil }
         let usedPages = Double(
             stats.active_count + stats.wire_count + stats.compressor_page_count
         )
         let freePages = Double(stats.free_count + stats.inactive_count)
-        let usedBytes = usedPages * pageSize
-        let totalBytes = (usedPages + freePages) * pageSize
-        return (usedBytes / totalBytes) * 100.0
+        let totalPages = usedPages + freePages
+        return totalPages > 0 ? usedPages / totalPages * 100 : nil
     }
 
-    // MARK: – SIEĆ (KB/s)
+    // MARK: – Network (KB/s)
 
-    private func getNetworkUsage() -> (bytesIn: UInt64, bytesOut: UInt64) {
-        var addrs: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&addrs) == 0, let first = addrs else {
-            return (0, 0)
+    /// Uses 64-bit interface counters; `getifaddrs`' `if_data` counters are
+    /// 32-bit and wrap every 4 GB.
+    private func readNetworkRates() -> (inKB: Double, outKB: Double)? {
+        guard let (bytesIn, bytesOut) = Sampler.readInterfaceBytes() else {
+            return nil
         }
-        defer { freeifaddrs(addrs) }
+        let now = DispatchTime.now().uptimeNanoseconds
+        defer { lastNet = (now, bytesIn, bytesOut) }
+
+        guard let last = lastNet, now > last.time else { return nil }
+        let dt = Double(now - last.time) / 1_000_000_000
+        // Counters drop when an interface disappears (e.g. VPN disconnect).
+        let deltaIn = bytesIn >= last.bytesIn ? bytesIn - last.bytesIn : 0
+        let deltaOut = bytesOut >= last.bytesOut ? bytesOut - last.bytesOut : 0
+        return (Double(deltaIn) / dt / 1024, Double(deltaOut) / dt / 1024)
+    }
+
+    private static func readInterfaceBytes() -> (UInt64, UInt64)? {
+        var mib: [Int32] = [CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0]
+        var length = 0
+        guard sysctl(&mib, u_int(mib.count), nil, &length, nil, 0) == 0 else {
+            return nil
+        }
+        var buffer = [UInt8](repeating: 0, count: length)
+        guard sysctl(&mib, u_int(mib.count), &buffer, &length, nil, 0) == 0
+        else { return nil }
 
         var totalIn: UInt64 = 0
         var totalOut: UInt64 = 0
-        var ptr = first
-
-        repeat {
-            let flags = Int32(ptr.pointee.ifa_flags)
-            let family = ptr.pointee.ifa_addr.pointee.sa_family
-            if family == UInt8(AF_LINK) && (flags & IFF_LOOPBACK) == 0 {
-                let data = ptr.pointee.ifa_data
-                    .assumingMemoryBound(to: if_data.self)
-                    .pointee
-                totalIn += UInt64(data.ifi_ibytes)
-                totalOut += UInt64(data.ifi_obytes)
+        buffer.withUnsafeBytes { raw in
+            var offset = 0
+            while offset + MemoryLayout<if_msghdr>.size <= length {
+                let header = raw.loadUnaligned(
+                    fromByteOffset: offset, as: if_msghdr.self)
+                guard header.ifm_msglen > 0 else { break }
+                if Int32(header.ifm_type) == RTM_IFINFO2,
+                    offset + MemoryLayout<if_msghdr2>.size <= length
+                {
+                    let info = raw.loadUnaligned(
+                        fromByteOffset: offset, as: if_msghdr2.self)
+                    if info.ifm_flags & IFF_LOOPBACK == 0 {
+                        totalIn += info.ifm_data.ifi_ibytes
+                        totalOut += info.ifm_data.ifi_obytes
+                    }
+                }
+                offset += Int(header.ifm_msglen)
             }
-            if let next = ptr.pointee.ifa_next {
-                ptr = next
-            } else {
-                break
-            }
-        } while true
-
-        let now = Date().timeIntervalSince1970
-        defer { lastNetStats = (now, totalIn, totalOut) }
-
-        guard let last = lastNetStats else {
-            return (0, 0)
         }
-        let dt = now - last.timestamp
-        guard dt > 0 else { return (0, 0) }
-
-        let deltaIn = totalIn - last.bytesIn
-        let deltaOut = totalOut - last.bytesOut
-        return (
-            UInt64(Double(deltaIn) / dt),
-            UInt64(Double(deltaOut) / dt)
-        )
+        return (totalIn, totalOut)
     }
 
-    // MARK: – DYSK
+    // MARK: – Disk
 
-    private func getDiskSpace() -> (freeGB: Double, totalGB: Double) {
+    private func readDiskSpace() -> (freeGB: Double, totalGB: Double)? {
         var stat = statfs()
-        guard statfs("/", &stat) == 0 else { return (0, 0) }
+        guard statfs("/", &stat) == 0 else { return nil }
         let blockSize = Double(stat.f_bsize)
-        let freeBytes = Double(stat.f_bavail) * blockSize
-        let totalBytes = Double(stat.f_blocks) * blockSize
         return (
-            freeBytes / 1_000_000_000,
-            totalBytes / 1_000_000_000
+            Double(stat.f_bavail) * blockSize / 1_000_000_000,
+            Double(stat.f_blocks) * blockSize / 1_000_000_000
         )
     }
 
-    private func getGPUUsage() -> Double {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/sbin/ioreg")
-        task.arguments = ["-l", "-w0", "-c", "IOAccelerator"]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        do {
-            try task.run()
-        } catch {
-            print("Failed to run process: \(error)")
-            return 0
-        }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        task.waitUntilExit()
-        guard let output = String(data: data, encoding: .utf8) else { return 0 }
+    // MARK: – GPU
 
-        let regexPattern = #"PercentBusy\s*=\s*(\d+)"#
-        if let regex = try? NSRegularExpression(pattern: regexPattern),
-            let match = regex.firstMatch(
-                in: output,
-                range: NSRange(output.startIndex..., in: output)
-            ),
-            let range = Range(match.range(at: 1), in: output),
-            let number = Double(output[range])
-        {
-            return number
+    /// Reads the accelerator's utilization straight from the IORegistry.
+    private func readGPUUsage() -> Double? {
+        if gpuServices.isEmpty {
+            gpuServices = Sampler.matchServices("IOAccelerator")
         }
-        return 0
+        let values = gpuServices.compactMap { service -> Double? in
+            guard
+                let stats = IORegistryEntryCreateCFProperty(
+                    service, "PerformanceStatistics" as CFString,
+                    kCFAllocatorDefault, 0
+                )?.takeRetainedValue() as? [String: Any],
+                let value = stats["Device Utilization %"] as? NSNumber
+                    ?? stats["GPU Activity(%)"] as? NSNumber
+            else { return nil }
+            return value.doubleValue
+        }
+        if values.isEmpty {
+            // GPU went away (e.g. eGPU unplugged); rematch next tick.
+            gpuServices.forEach { IOObjectRelease($0) }
+            gpuServices = []
+            return nil
+        }
+        return values.max()
     }
 
-    private func getSystemUptimeSinceBoot() -> TimeInterval {
+    private static func matchServices(_ className: String) -> [io_service_t] {
+        var iterator: io_iterator_t = 0
+        guard
+            IOServiceGetMatchingServices(
+                kIOMainPortDefault, IOServiceMatching(className), &iterator)
+                == KERN_SUCCESS
+        else { return [] }
+        defer { IOObjectRelease(iterator) }
+        var services: [io_service_t] = []
+        while case let service = IOIteratorNext(iterator), service != 0 {
+            services.append(service)
+        }
+        return services
+    }
+
+    // MARK: – Uptime
+
+    private static func readBootDate() -> Date {
         var boottime = timeval()
         var mib: [Int32] = [CTL_KERN, KERN_BOOTTIME]
         var size = MemoryLayout<timeval>.stride
-
-        let result = sysctl(&mib, UInt32(mib.count), &boottime, &size, nil, 0)
-        guard result == 0 else {
-            return ProcessInfo.processInfo.systemUptime
+        guard sysctl(&mib, u_int(mib.count), &boottime, &size, nil, 0) == 0
+        else {
+            return Date(
+                timeIntervalSinceNow: -ProcessInfo.processInfo.systemUptime)
         }
-
-        let bootDate = Date(
+        return Date(
             timeIntervalSince1970: TimeInterval(boottime.tv_sec)
                 + TimeInterval(boottime.tv_usec) / 1_000_000
         )
-
-        return Date().timeIntervalSince(bootDate)
     }
 
-    private func getBatteryHealth() -> Double {
-        let matchingNames = ["AppleSmartBattery", "AppleSmartBatteryManager"]
-        var service: io_service_t = 0
-        for name in matchingNames {
-            service = IOServiceGetMatchingService(
-                kIOMainPortDefault,
-                IOServiceMatching(name)
-            )
-            if service != 0 { break }
-        }
-        guard service != 0 else { return 100 }
-        defer { IOObjectRelease(service) }
+    // MARK: – Battery
 
-        let rawKeys = ["AppleRawMaxCapacity", "MaxCapacity"]
-        let maxCap =
-            rawKeys.compactMap { key in
-                IORegistryEntryCreateCFProperty(
-                    service,
-                    key as CFString,
-                    kCFAllocatorDefault,
-                    0
-                )?
-                .takeRetainedValue() as? NSNumber
-            }.first?.doubleValue ?? 0
-
-        let designCap =
-            (IORegistryEntryCreateCFProperty(
-                service,
-                "DesignCapacity" as CFString,
-                kCFAllocatorDefault,
-                0
-            )?
-            .takeRetainedValue() as? NSNumber)?
-            .doubleValue ?? 0
-
-        return designCap > 0
-            ? (maxCap / designCap) * 100.0
-            : 100.0
-    }
-
-    private func getBatteryInfo() -> (
-        level: Double, timeToFull: TimeInterval, health: Double
-    ) {
+    private func readBattery(includeHealth: Bool) {
         guard
             let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
             let list = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue()
                 as? [CFTypeRef],
-            let ps = list.first,
-            let desc = IOPSGetPowerSourceDescription(blob, ps)?
+            let source = list.first,
+            let desc = IOPSGetPowerSourceDescription(blob, source)?
                 .takeUnretainedValue() as? [String: Any]
         else {
-            return (0, 0, 100)
+            stats.hasBattery = false
+            stats.isPluggedIn = true
+            return
         }
 
-        let currentCapInt = desc[kIOPSCurrentCapacityKey as String] as? Int ?? 0
-        let maxCapInt = desc[kIOPSMaxCapacityKey as String] as? Int ?? 1
-
-        let currentCap = Double(currentCapInt)
-        let maxCap = Double(maxCapInt)
-
-        let level = (currentCap / maxCap) * 100.0
-
+        let current = Double(desc[kIOPSCurrentCapacityKey as String] as? Int ?? 0)
+        let max = Double(desc[kIOPSMaxCapacityKey as String] as? Int ?? 0)
         let minutesToFull =
             desc[kIOPSTimeToFullChargeKey as String] as? Int ?? -1
-        let secondsToFull = minutesToFull > 0 ? Double(minutesToFull) * 60.0 : 0
 
-        let health = self.getBatteryHealth()
+        stats.hasBattery = true
+        stats.batteryLevel = max > 0 ? current / max * 100 : 0
+        stats.timeToFullCharge =
+            minutesToFull > 0 ? Double(minutesToFull) * 60 : 0
+        stats.isCharging = desc[kIOPSIsChargingKey as String] as? Bool ?? false
+        stats.isPluggedIn =
+            desc[kIOPSPowerSourceStateKey as String] as? String
+            == kIOPSACPowerValue
+        if includeHealth {
+            stats.batteryHealth = readBatteryHealth() ?? stats.batteryHealth
+        }
+    }
 
-        return (level, secondsToFull, health)
+    private func readBatteryHealth() -> Double? {
+        let service = IOServiceGetMatchingService(
+            kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
+        guard service != 0 else { return nil }
+        defer { IOObjectRelease(service) }
+
+        func number(_ key: String) -> Double? {
+            (IORegistryEntryCreateCFProperty(
+                service, key as CFString, kCFAllocatorDefault, 0
+            )?.takeRetainedValue() as? NSNumber)?.doubleValue
+        }
+        guard
+            let maxCapacity = number("AppleRawMaxCapacity")
+                ?? number("MaxCapacity"),
+            let designCapacity = number("DesignCapacity"), designCapacity > 0
+        else { return nil }
+        return maxCapacity / designCapacity * 100
     }
 }
